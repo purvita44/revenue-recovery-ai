@@ -113,8 +113,8 @@ export function validateDecision(input: unknown): Decision {
   return candidate as Decision;
 }
 
-export function authorizeDecision(payment: Pick<PaymentCase, "failureReason" | "retryCount" | "consent" | "fraudFlag">, recommendation: Decision): Decision {
-  const policy = classifyCase({ ...payment, id: "policy-check", customer: "", initials: "", amount: 0, plan: "", recoverability: 0, daysSinceFailure: 0, previousPayments: 0, outcomeSeed: 0 });
+export function authorizeDecision(payment: Pick<PaymentCase, "failureReason" | "retryCount" | "consent" | "fraudFlag" | "daysSinceFailure">, recommendation: Decision): Decision {
+  const policy = classifyCase({ ...payment, id: "policy-check", customer: "", initials: "", amount: 0, plan: "", recoverability: 0, previousPayments: 0, outcomeSeed: 0 });
   const samePath = policy.path === recommendation.path;
   const sameAction = policy.action === recommendation.action;
   if (samePath && sameAction) return recommendation;

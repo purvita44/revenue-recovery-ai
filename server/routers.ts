@@ -54,7 +54,7 @@ export const appRouter = router({
       }
       catch (error) { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error ? error.message : "Invalid AI recommendation" }); }
     }),
-    recommendBatch: protectedProcedure.input(z.object({ cases: z.array(z.object({ caseId: z.string(), customer: z.string(), amount: z.number(), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number(), consent: z.boolean(), fraudFlag: z.boolean() })).max(60) })).mutation(async ({ input }) => {
+    recommendBatch: protectedProcedure.input(z.object({ cases: z.array(z.object({ caseId: z.string(), customer: z.string(), amount: z.number(), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number().int().min(0).max(3), consent: z.boolean(), fraudFlag: z.boolean(), daysSinceFailure: z.number().int().min(0).max(3650) })).max(60) })).mutation(async ({ input }) => {
       const response = await invokeLLM({
         messages: [
           { role: "system", content: "You are RecoverIQ's batch payment-recovery diagnosis engine. For every case, recommend only one bounded simulated action. Never move money. Respect consent, fraud, and retry limits. Return one decision per case in the same order. Return only the requested structured JSON array." },
