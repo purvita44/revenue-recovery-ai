@@ -52,6 +52,7 @@ export type AuditEvent = {
 const names = ["Maya Patel", "Arjun Mehta", "Sara Iyer", "Kabir Shah", "Nisha Rao", "Rohan Gupta", "Aditi Menon", "Vikram Das", "Neha Kapoor", "Dev Malhotra"];
 const reasons: FailureReason[] = ["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"];
 const amounts = [1299, 2499, 4999, 7999, 999, 3499, 5999];
+const MIN_COOLING_DAYS = 1;
 
 export function generateBatch(seed = 42, count = 48): PaymentCase[] {
   let state = seed >>> 0;
@@ -91,6 +92,9 @@ export function classifyCase(payment: PaymentCase): Decision {
   if (!payment.consent) {
     return { path: "human-review", action: "escalate_operator", diagnosis: "Customer contact unavailable", rationale: "Consent is absent, so RecoverIQ cannot send a reminder. The case is routed to an operator.", confidence: 0.98, policyRule: "R-04 · Consent gate", requiresApproval: true, nextStep: "Operator to select compliant contact route", stopReason: "No contact consent" };
   }
+  if (payment.daysSinceFailure < MIN_COOLING_DAYS) {
+    return { path: "human-review", action: "stop", diagnosis: "Cooling period active", rationale: "No retry or customer contact is permitted until the 24-hour cooling period has elapsed.", confidence: 1, policyRule: "R-01 · Cooling period", requiresApproval: false, nextStep: "Re-evaluate after the cooling period", stopReason: "Cooling period not elapsed" };
+  }
   if (payment.retryCount >= 3) {
     return { path: "human-review", action: "escalate_operator", diagnosis: "Retry budget exhausted", rationale: "The maximum of three automatic attempts has been reached. Further retries are stopped.", confidence: 0.99, policyRule: "R-05 · Terminal retry limit", requiresApproval: true, nextStep: "Operator review required", stopReason: "Automatic retry limit exhausted" };
   }
@@ -119,7 +123,9 @@ export function authorizeDecision(payment: Pick<PaymentCase, "failureReason" | "
 
 export function simulateAction(payment: PaymentCase, decision: Decision): SimulationOutcome {
   if (decision.action === "escalate_operator") return "permanent_failure";
-  if (payment.outcomeSeed < payment.recoverability && decision.action !== "stop") return "success";
+  if (decision.action === "stop") return "permanent_failure";
+  if (decision.action === "send_update_reminder") return "temporary_failure";
+  if (payment.outcomeSeed < payment.recoverability) return "success";
   if (payment.failureReason === "suspected_fraud") return "permanent_failure";
   if (payment.outcomeSeed > 0.97) return "simulator_error";
   return "temporary_failure";
@@ -130,7 +136,12 @@ export function calculateBaselineLift(recovered: number, baselineRecovered: numb
 }
 
 export function baselineAction(payment: PaymentCase): RecoveryAction {
-  return payment.retryCount < 1 ? "retry_payment" : "stop";
+  return payment.retryCount < 1 && classifyCase(payment).path === "recoverable" ? "retry_payment" : "stop";
+}
+
+export function simulateBaseline(payment: PaymentCase): SimulationOutcome {
+  const decision = classifyCase(payment);
+  return simulateAction(payment, { ...decision, action: baselineAction(payment) });
 }
 
 export function formatInr(value: number) {

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import { buildStakeholderCsv, calculateBaselineLift, classifyCase, formatInr, generateBatch, simulateAction, type AuditEvent, type Decision, type PaymentCase } from "@shared/recovery";
+import { buildStakeholderCsv, calculateBaselineLift, classifyCase, formatInr, generateBatch, simulateAction, simulateBaseline, type AuditEvent, type Decision, type PaymentCase } from "@shared/recovery";
 
 const initialCases = generateBatch(42, 48);
 
@@ -79,11 +79,11 @@ export default function Home() {
   const recoveryRate = Math.round((recovered / risk) * 100);
   const escalations = results.filter((item) => item.action === "escalate_operator").length;
   const safeStops = results.filter((item) => !item.recovered).length;
-  const baselineRecovered = results.filter((item) => item.retryCount < 1 && item.outcome === "success").reduce((sum, item) => sum + item.amount, 0);
+  const baselineRecovered = cases.filter((item) => simulateBaseline(item) === "success").reduce((sum, item) => sum + item.amount, 0);
   const baselineLift = calculateBaselineLift(recovered, baselineRecovered);
 
   const askAi = () => {
-    aiRecommendation.mutate({ caseId: selected.id, customer: selected.customer, amount: selected.amount, failureReason: selected.failureReason, retryCount: selected.retryCount, consent: selected.consent, fraudFlag: selected.fraudFlag });
+    aiRecommendation.mutate({ caseId: selected.id, customer: selected.customer, amount: selected.amount, failureReason: selected.failureReason, retryCount: selected.retryCount, consent: selected.consent, fraudFlag: selected.fraudFlag, daysSinceFailure: selected.daysSinceFailure });
   };
 
   const exportCsv = () => {
@@ -106,7 +106,7 @@ export default function Home() {
     const nextCases = generateBatch(Date.now() % 100000, 48);
     let aiDecisions: Decision[];
     try {
-      aiDecisions = await aiBatchRecommendation.mutateAsync({ cases: nextCases.map((item) => ({ caseId: item.id, customer: item.customer, amount: item.amount, failureReason: item.failureReason, retryCount: item.retryCount, consent: item.consent, fraudFlag: item.fraudFlag })) });
+      aiDecisions = await aiBatchRecommendation.mutateAsync({ cases: nextCases.map((item) => ({ caseId: item.id, customer: item.customer, amount: item.amount, failureReason: item.failureReason, retryCount: item.retryCount, consent: item.consent, fraudFlag: item.fraudFlag, daysSinceFailure: item.daysSinceFailure })) });
     } catch {
       aiDecisions = nextCases.map((item) => classifyCase(item));
     }
