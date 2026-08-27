@@ -108,8 +108,10 @@ export function validateDecision(input: unknown): Decision {
   if (!input || typeof input !== "object") throw new Error("Invalid AI decision: expected an object");
   const candidate = input as Partial<Decision>;
   const allowedActions: RecoveryAction[] = ["retry_payment", "send_update_reminder", "escalate_operator", "stop"];
+  const allowedPaths: CasePath[] = ["recoverable", "customer-action", "restricted", "human-review"];
   if (!allowedActions.includes(candidate.action as RecoveryAction)) throw new Error("Invalid AI decision: unsupported action");
-  if (!candidate.path || !candidate.diagnosis || !candidate.rationale || typeof candidate.confidence !== "number" || !candidate.policyRule || typeof candidate.requiresApproval !== "boolean" || !candidate.nextStep) throw new Error("Invalid AI decision: missing required field");
+  if (!allowedPaths.includes(candidate.path as CasePath)) throw new Error("Invalid AI decision: unsupported path");
+  if (typeof candidate.diagnosis !== "string" || !candidate.diagnosis.trim() || typeof candidate.rationale !== "string" || !candidate.rationale.trim() || typeof candidate.policyRule !== "string" || !candidate.policyRule.trim() || typeof candidate.nextStep !== "string" || !candidate.nextStep.trim() || typeof candidate.requiresApproval !== "boolean" || typeof candidate.confidence !== "number" || !Number.isFinite(candidate.confidence) || candidate.confidence < 0 || candidate.confidence > 1 || (candidate.stopReason !== undefined && typeof candidate.stopReason !== "string")) throw new Error("Invalid AI decision: missing or invalid required field");
   return candidate as Decision;
 }
 
