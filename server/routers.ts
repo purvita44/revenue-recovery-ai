@@ -23,10 +23,10 @@ export const appRouter = router({
   }),
 
   audit: router({
-    list: protectedProcedure.query(() => listRecoveryAuditEvents()),
+    list: protectedProcedure.query(({ ctx }) => listRecoveryAuditEvents(ctx.user.openId)),
     append: protectedProcedure.input(z.array(z.object({
       eventId: z.string().max(80), caseId: z.string().max(32), kind: z.string().max(32), title: z.string().max(160), detail: z.string(), status: z.string().max(24), eventTimestamp: z.coerce.date(),
-    }))).mutation(({ input }) => appendRecoveryAuditEvents(input)),
+    }))).mutation(({ input, ctx }) => appendRecoveryAuditEvents(input, ctx.user.openId)),
   }),
   ai: router({
     recommend: protectedProcedure.input(z.object({ caseId: z.string(), customer: z.string(), amount: z.number().finite().positive().max(1_000_000), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number().int().min(0).max(3), consent: z.boolean(), fraudFlag: z.boolean(), daysSinceFailure: z.number().int().min(0).max(3650) })).mutation(async ({ input }) => {
