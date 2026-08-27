@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { appendRecoveryAuditEvents, listRecoveryAuditEvents } from "./db";
@@ -23,13 +23,13 @@ export const appRouter = router({
   }),
 
   audit: router({
-    list: publicProcedure.query(() => listRecoveryAuditEvents()),
-    append: publicProcedure.input(z.array(z.object({
+    list: protectedProcedure.query(() => listRecoveryAuditEvents()),
+    append: protectedProcedure.input(z.array(z.object({
       eventId: z.string().max(80), caseId: z.string().max(32), kind: z.string().max(32), title: z.string().max(160), detail: z.string(), status: z.string().max(24), eventTimestamp: z.coerce.date(),
     }))).mutation(({ input }) => appendRecoveryAuditEvents(input)),
   }),
   ai: router({
-    recommend: publicProcedure.input(z.object({ caseId: z.string(), customer: z.string(), amount: z.number(), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number(), consent: z.boolean(), fraudFlag: z.boolean() })).mutation(async ({ input }) => {
+    recommend: protectedProcedure.input(z.object({ caseId: z.string(), customer: z.string(), amount: z.number().finite().positive().max(1_000_000), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number().int().min(0).max(3), consent: z.boolean(), fraudFlag: z.boolean(), daysSinceFailure: z.number().int().min(0).max(3650) })).mutation(async ({ input }) => {
       const response = await invokeLLM({
         messages: [
           { role: "system", content: "You are RecoverIQ's payment-recovery diagnosis engine. Recommend only a bounded simulated action. Never move money. Respect consent, fraud, and retry limits. Return only the requested structured object." },
@@ -54,7 +54,7 @@ export const appRouter = router({
       }
       catch (error) { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error ? error.message : "Invalid AI recommendation" }); }
     }),
-    recommendBatch: publicProcedure.input(z.object({ cases: z.array(z.object({ caseId: z.string(), customer: z.string(), amount: z.number(), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number(), consent: z.boolean(), fraudFlag: z.boolean() })).max(60) })).mutation(async ({ input }) => {
+    recommendBatch: protectedProcedure.input(z.object({ cases: z.array(z.object({ caseId: z.string(), customer: z.string(), amount: z.number(), failureReason: z.enum(["network_error", "bank_unavailable", "insufficient_funds", "expired_card", "invalid_payment_method", "suspected_fraud", "unknown_error"]), retryCount: z.number(), consent: z.boolean(), fraudFlag: z.boolean() })).max(60) })).mutation(async ({ input }) => {
       const response = await invokeLLM({
         messages: [
           { role: "system", content: "You are RecoverIQ's batch payment-recovery diagnosis engine. For every case, recommend only one bounded simulated action. Never move money. Respect consent, fraud, and retry limits. Return one decision per case in the same order. Return only the requested structured JSON array." },
@@ -66,7 +66,10 @@ export const appRouter = router({
       try {
         const raw = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
         if (!Array.isArray(raw) || raw.length !== input.cases.length) throw new Error("Invalid AI batch recommendation count");
-        return raw.map((item, index) => authorizeDecision(input.cases[index], validateDecision(item)));
+        return raw.map((item, index) => {
+          if (!item || typeof item !== "object" || (item as { caseId?: unknown }).caseId !== input.cases[index].caseId) throw new Error("AI batch recommendations do not match submitted cases");
+          return authorizeDecision(input.cases[index], validateDecision(item));
+        });
       } catch (error) { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error instanceof Error ? error.message : "Invalid AI batch recommendation" }); }
     }),
   }),
