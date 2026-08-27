@@ -42,6 +42,13 @@ describe("RecoverIQ policy engine", () => {
     expect(authorized.rationale).toContain("overruled");
   });
 
+  it("preserves an authorized recommendation after the cooling period", () => {
+    const recommendation = classifyCase(baseCase);
+    const authorized = authorizeDecision({ ...baseCase, daysSinceFailure: 1 }, recommendation);
+    expect(authorized.action).toBe("retry_payment");
+    expect(authorized.policyRule).toContain("Transient");
+  });
+
   it("calculates baseline lift from the current batch values", () => {
     expect(calculateBaselineLift(1500, 1000)).toBe(50);
     expect(calculateBaselineLift(500, 1000)).toBe(-50);
