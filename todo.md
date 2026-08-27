@@ -1,0 +1,47 @@
+# Project TODO
+
+- [x] Record the expanded RecoverIQ simulation-platform scope and implementation decisions
+- [x] Inspect and reuse the provided dashboard/layout and UI components
+- [x] Define the synthetic failed-subscription-payment data model
+- [x] Generate a reproducible synthetic batch with recoverability ground truth
+- [x] Implement failure classification and revenue-at-risk calculations
+- [x] Implement explicit recovery policies and policy validation
+- [x] Implement retry/backoff, cooling-period, consent, approval, and terminal stopping rules
+- [x] Implement bounded simulated payment retry action
+- [x] Implement bounded simulated payment-method update reminder action
+- [x] Implement bounded simulated operator escalation action
+- [x] Implement simulated outcome verification with no real-money movement
+- [x] Implement append-only audit events for decisions and actions
+- [x] Implement dashboard metrics for risk, recovered value, recovery rate, recoveries, escalations, safe stops, and unrecovered value
+- [x] Implement searchable and filterable case table
+- [x] Implement case-detail timeline with diagnosis, action, rationale, policy, outcome, next step, and stop reason
+- [x] Implement baseline strategy comparison and recovery-efficiency metrics
+- [x] Add tests for retry-limit exhaustion
+- [x] Add tests for missing contact consent
+- [x] Add tests for fraud/restricted cases
+- [x] Add tests for invalid AI output
+- [x] Add tests for simulator errors and safe failure handling
+- [x] Verify responsive polished UI in the browser
+- [x] Run typecheck, tests, and build verification
+- [x] Save final project checkpoint and provide the project version
+- [x] Fix mobile header action overflow and compact the mobile page title
+- [x] Inspect the provided DashboardLayout component and document the decision to use a custom control-room shell or customize the provided layout
+- [x] Add a true mobile-specific compact page title and re-verify the header
+- [x] Document why the public demo uses a custom control-room shell instead of the authenticated DashboardLayout
+- [x] Add stakeholder CSV export for recovery outcomes and the append-only audit trail
+- [x] Add export serialization tests and verify the browser download flow
+- [x] Add genuine structured AI diagnosis and recommendation behind deterministic policy validation
+- [x] Replace hardcoded baseline percentages with dynamic batch calculations
+- [x] Label all monetary metrics as simulated or synthetic and document the ground-truth simulator in README and pitch materials
+- [x] Persist audit events server-side with append-only behavior
+- [x] Add tests for AI recommendation parsing, dynamic baseline calculations, and server audit persistence
+- [x] Route simulated batch decisions through structured AI output and deterministic policy authorization
+- [x] Relabel every monetary display and baseline delta as synthetic or simulated
+- [x] Make server-persisted audit history the primary source and backfill the initial batch
+- [x] Add direct tests for baseline calculation and server audit append/list behavior
+- [x] Route the actual batch decision and simulation path through structured AI recommendation plus authorizeDecision
+- [x] Relabel remaining case-table and baseline-delta monetary strings
+- [x] Refetch server audit history after initial seed and use it as the displayed source of truth
+- [x] Add an append-then-list server audit persistence test
+- [x] Add a real uniquely identified audit append-then-list assertion against the configured database
+- [ ] Sync the saved RecoverIQ Track 03 project into purvita44/revenue-recovery-ai and verify the remote branch
