@@ -28,6 +28,7 @@ export type InsertUser = typeof users.$inferInsert;
 export const recoveryAuditEvents = mysqlTable("recoveryAuditEvents", {
   id: int("id").autoincrement().primaryKey(),
   eventId: varchar("eventId", { length: 80 }).notNull().unique(),
+  ownerOpenId: varchar("ownerOpenId", { length: 64 }).notNull(),
   caseId: varchar("caseId", { length: 32 }).notNull(),
   kind: varchar("kind", { length: 32 }).notNull(),
   title: varchar("title", { length: 160 }).notNull(),
