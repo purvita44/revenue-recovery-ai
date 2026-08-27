@@ -18,20 +18,20 @@ RecoverIQ closes that loop on a reproducible synthetic batch without moving real
 
 ```mermaid
 flowchart LR
-    A[Failed subscription payment] --> B[Detect revenue at risk]
-    B --> C[Diagnose root cause]
-    C --> D[AI recommends intervention]
-    D --> E{Deterministic policy validator}
-    E -->|Allowed| F[Execute bounded simulation]
-    E -->|Unsafe or restricted| G[Stop or escalate]
-    F --> H[Verify simulated outcome]
-    H -->|Recovered| I[Close case]
-    H -->|Still unpaid| J{Retry budget and consent available?}
-    J -->|Yes| F
-    J -->|No| G
-    I --> K[Append audit event]
-    G --> K
-    K --> L[Update metrics and stakeholder report]
+    A[Failed subscription payment] --- B[Detect revenue at risk]
+    B --- C[Diagnose root cause]
+    C --- D[AI recommends intervention]
+    D --- E{Deterministic policy validator}
+    E ---|Allowed| F[Execute bounded simulation]
+    E ---|Unsafe or restricted| G[Stop or escalate]
+    F --- H[Verify simulated outcome]
+    H ---|Recovered| I[Close case]
+    H ---|Still unpaid| J{Retry budget and consent available?}
+    J ---|Yes| F
+    J ---|No| G
+    I --- K[Append audit event]
+    G --- K
+    K --- L[Update metrics and stakeholder report]
 ```
 
 The model is responsible for contextual diagnosis and recommendation. The deterministic policy layer remains the authority for consent, fraud restrictions, retry limits, cooling periods, approvals, terminal stops, and allowed actions.
@@ -43,7 +43,7 @@ flowchart TB
     subgraph Input[1. Synthetic input]
         A[Reproducible payment batch]
         B[Amount, reason, retries, consent, fraud flag]
-        A --> B
+        A --- B
     end
 
     subgraph Intelligence[2. Agent intelligence]
@@ -51,7 +51,7 @@ flowchart TB
         D[Structured AI diagnosis]
         E[JSON-schema validation]
         F[Deterministic policy authorization]
-        C --> D --> E --> F
+        C --- D --- E --- F
     end
 
     subgraph Execution[3. Bounded execution]
@@ -59,9 +59,9 @@ flowchart TB
         H[Send update reminder]
         I[Escalate to operator]
         J[Deterministic payment simulator]
-        G --> J
-        H --> J
-        I --> J
+        G --- J
+        H --- J
+        I --- J
     end
 
     subgraph Control[4. Verification and control]
@@ -69,9 +69,9 @@ flowchart TB
         L[Retry and cooling rules]
         M[Consent and fraud gates]
         N[Terminal stopping rules]
-        K --> L
-        L --> M
-        M --> N
+        K --- L
+        L --- M
+        M --- N
     end
 
     subgraph Evidence[5. Evidence]
@@ -80,15 +80,15 @@ flowchart TB
         Q[CSV stakeholder report]
     end
 
-    B --> C
-    F -->|Authorized action| G
-    F -->|Authorized action| H
-    F -->|Authorized action| I
-    J --> K
-    N --> O
-    K --> O
-    O --> P
-    P --> Q
+    B --- C
+    F ---|Authorized action| G
+    F ---|Authorized action| H
+    F ---|Authorized action| I
+    J --- K
+    N --- O
+    K --- O
+    O --- P
+    P --- Q
 ```
 
 ## How one case works
@@ -209,7 +209,7 @@ The ground-truth simulator uses the recoverability value and outcome seed to pro
 
 A recommended judging statement is:
 
-> “RecoverIQ does not retry everything. It uses AI to understand the case, deterministic policy to control the action, simulation to verify the result, and an audit trail to explain why it acted or stopped.”
+> "RecoverIQ does not retry everything. It uses AI to understand the case, deterministic policy to control the action, simulation to verify the result, and an audit trail to explain why it acted or stopped."
 
 ## Project structure
 
@@ -241,7 +241,7 @@ pnpm test
 pnpm build
 ```
 
-The application requires the project’s configured database and built-in server-side AI environment variables. Database schema changes are represented in `drizzle/schema.ts` and the generated migration files.
+The application requires the project's configured database and built-in server-side AI environment variables. Database schema changes are represented in `drizzle/schema.ts` and the generated migration files.
 
 ## Safety boundary
 
