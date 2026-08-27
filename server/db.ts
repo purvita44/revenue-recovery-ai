@@ -89,16 +89,16 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function appendRecoveryAuditEvents(events: InsertRecoveryAuditEvent[]) {
+export async function appendRecoveryAuditEvents(events: Omit<InsertRecoveryAuditEvent, "ownerOpenId">[], ownerOpenId: string) {
   const db = await getDb();
   if (!db || events.length === 0) return [];
-  await db.insert(recoveryAuditEvents).values(events);
+  await db.insert(recoveryAuditEvents).values(events.map((event) => ({ ...event, ownerOpenId })));
   return events;
 }
 
-export async function listRecoveryAuditEvents() {
+export async function listRecoveryAuditEvents(ownerOpenId: string) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(recoveryAuditEvents).orderBy(asc(recoveryAuditEvents.id));
+  return db.select().from(recoveryAuditEvents).where(eq(recoveryAuditEvents.ownerOpenId, ownerOpenId)).orderBy(asc(recoveryAuditEvents.id));
 }
 
