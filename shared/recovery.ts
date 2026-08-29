@@ -175,7 +175,7 @@ export type StakeholderOutcomeRow = {
 
 export function buildStakeholderCsv(outcomes: StakeholderOutcomeRow[], auditTrail: AuditEvent[]) {
   const headers = ["record_type", "case_id", "customer", "amount_inr", "path", "diagnosis", "action", "confidence", "policy_rule", "approval_status", "outcome", "recovered", "next_step", "stop_reason", "final_state", "attempts", "recovered_amount_inr", "event_timestamp", "event_kind", "event_title", "event_detail", "event_status"];
-  const rows = outcomes.map((row) => ["recovery_outcome", row.caseId, row.customer, row.amount, row.path, row.diagnosis, row.action, row.confidence, row.policyRule, row.approvalStatus, row.outcome, row.recovered, row.nextStep, row.stopReason, row.finalState || "", row.attempts ?? "", row.recoveredAmount ?? ""]);
+  const rows = outcomes.map((row) => ["recovery_outcome", row.caseId, row.customer, row.amount, row.path, row.diagnosis, row.action, row.confidence, row.policyRule, row.approvalStatus, row.outcome, row.recovered, row.nextStep, row.stopReason, row.finalState || "", row.attempts ?? "", row.recoveredAmount ?? "", "", "", "", "", ""]);
   const events = auditTrail.map((event) => ["audit_event", event.caseId, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", event.timestamp, event.kind, event.title, event.detail, event.status]);
   return [headers, ...rows, ...events].map((row) => row.map(escapeCsv).join(",")).join("\n") + "\n";
 }

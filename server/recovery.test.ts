@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { authorizeDecision, buildStakeholderCsv, calculateBaselineLift, classifyCase, generateBatch, runRecoveryWorkflow, simulateAction, validateDecision, type AuditEvent, type PaymentCase } from "../shared/recovery";
 
+function parseCsvRow(line: string) {
+  const cells: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') { cell += '"'; index += 1; } else { quoted = !quoted; }
+    } else if (char === "," && !quoted) {
+      cells.push(cell); cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell);
+  return cells;
+}
+
 const baseCase: PaymentCase = {
   id: "PAY-TEST", customer: "Test Customer", initials: "TC", amount: 2500, plan: "Growth",
   failureReason: "network_error", retryCount: 0, consent: true, recoverability: 0.8,
@@ -79,6 +97,12 @@ describe("RecoverIQ policy engine", () => {
     const event: AuditEvent = { id: "evt-1", caseId: "PAY-TEST", timestamp: "2026-08-27T10:00:00.000Z", kind: "diagnosis", title: "Failure, diagnosed", detail: "Customer said \"retry\"", status: "info" };
     const csv = buildStakeholderCsv([{ caseId: "PAY-TEST", customer: "Test, Customer", amount: 2500, path: "recoverable", diagnosis: "Transient failure", action: "retry_payment", confidence: 0.87, policyRule: "R-02", approvalStatus: "not_required", outcome: "success", recovered: true, nextStep: "Verify payment", stopReason: "", finalState: "RECOVERED", attempts: 2, recoveredAmount: 2500 }], [event]);
     expect(csv).toContain("record_type,case_id,customer,amount_inr");
+    expect(csv).toContain("final_state,attempts,recovered_amount_inr");
+    const outcomeRow = parseCsvRow(csv.split("\n")[1] || "");
+    expect(outcomeRow).toHaveLength(22);
+    expect(outcomeRow?.[14]).toBe("RECOVERED");
+    expect(outcomeRow?.[15]).toBe("2");
+    expect(outcomeRow?.[16]).toBe("2500");
     expect(csv).toContain('"Test, Customer"');
     expect(csv).toContain('"Failure, diagnosed"');
     expect(csv).toContain('"Customer said ""retry"""');
