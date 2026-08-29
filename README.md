@@ -264,3 +264,36 @@ RecoverIQ is a buildathon simulation platform. It is not connected to a live pay
 ## License
 
 This repository is a buildathon prototype for demonstrating AI-assisted revenue recovery with policy-controlled simulation.
+
+
+## Multi-step agent loop
+
+RecoverIQ runs each failed subscription-payment case through a bounded observe-and-re-evaluate loop:
+
+```mermaid
+flowchart TD
+    A[Payment failed] --> B[Structured AI diagnosis]
+    B --> C[Deterministic policy authorization]
+    C --> D{Allowed action}
+    D -->|Retry| E[Execute simulated retry]
+    D -->|Customer action| F[Send simulated update reminder]
+    D -->|Human review| G[Escalate without automated payment action]
+    E --> H[Observe simulated outcome]
+    F --> I[Simulate payment-method update]
+    I --> E
+    H --> J{Re-evaluate guardrails}
+    J -->|Recovered| K[RECOVERED]
+    J -->|Budget remains| E
+    J -->|Unsafe or exhausted| L[STOPPED / ESCALATED]
+    G --> L
+```
+
+The runner has a hard step budget and preserves the existing deterministic policy engine. It can represent `RECOVERED`, `STOPPED`, `ESCALATED`, `WAITING`, and `HUMAN_REVIEW` outcomes. Customer-action cases model `reminder_sent`, `payment_method_updated`, `retry_executed`, and `payment_recovered` as synthetic events before verification.
+
+## Replayable demo scenarios
+
+The dashboard includes replay controls for transient failures, expired cards, insufficient funds, fraud, missing consent, and retry exhaustion. Each replay uses the same deterministic case seed, so the timeline and outcome can be inspected repeatedly without moving real money.
+
+## Step-level auditability
+
+Every workflow step produces an audit event containing the case ID, timestamp, event type, state, previous state where applicable, next action, policy rule, policy decision, action result, and recovered amount where applicable. Server-side audit persistence remains the primary source for the displayed timeline, and the stakeholder CSV export includes the resulting workflow evidence.

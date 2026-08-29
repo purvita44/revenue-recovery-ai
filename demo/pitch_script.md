@@ -23,3 +23,16 @@ Start by running the recovery batch. Show the aggregate synthetic revenue at ris
 Open a transient network-failure case and click Ask AI. Show the structured recommendation, its confidence and rationale, the policy validation status, and the bounded retry timeline. Then open a missing-consent case to show that the AI cannot cause an unauthorized customer contact. Finally, open a fraud-flagged or retry-exhausted case to show human escalation and terminal stopping.
 
 End with the dynamic comparison against the one-retry baseline and the audit trail export. The key result is not that the agent acts on every case; it is that it recovers measurable synthetic value while knowing when to retry, when to request customer action, and when to stop.
+
+
+## Multi-step replay moment
+
+After the batch summary, select the **Transient failure** replay scenario and run it. Explain the timeline in this order: payment failed, AI diagnosed a transient failure, policy allowed the retry, retry one was executed and observed, policy re-evaluated the remaining budget, and the workflow either executed the next bounded retry or stopped safely. The final state must be shown as `RECOVERED`, `STOPPED`, or `ESCALATED` rather than implied by a single action.
+
+Next select **Expired card**. Show `reminder_sent`, the synthetic `payment_method_updated` event, `retry_required`, `retry_executed`, and `payment_recovered`. Emphasize that no real customer was contacted and no real payment method was changed.
+
+Close with **Retry exhaustion** or **Fraud case**. Show that the policy engine blocks further automation and routes the case to `HUMAN_REVIEW` or `ESCALATED`. Point to the per-step server audit events and the exported stakeholder CSV as evidence that every decision, action, observation, and stop reason is explainable.
+
+## Updated closing statement
+
+> RecoverIQ is not a one-shot retry script. It is a bounded agent loop: AI diagnoses the case, policy authorizes the next step, the simulator executes and observes the result, the agent re-evaluates the case, and the workflow recovers, stops, or escalates with a complete audit trail.

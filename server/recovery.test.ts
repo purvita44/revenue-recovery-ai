@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authorizeDecision, buildStakeholderCsv, calculateBaselineLift, classifyCase, generateBatch, simulateAction, validateDecision, type AuditEvent, type PaymentCase } from "../shared/recovery";
+import { authorizeDecision, buildStakeholderCsv, calculateBaselineLift, classifyCase, generateBatch, runRecoveryWorkflow, simulateAction, validateDecision, type AuditEvent, type PaymentCase } from "../shared/recovery";
 
 const baseCase: PaymentCase = {
   id: "PAY-TEST", customer: "Test Customer", initials: "TC", amount: 2500, plan: "Growth",
@@ -89,5 +89,31 @@ describe("RecoverIQ policy engine", () => {
     const decision = classifyCase({ ...baseCase, failureReason: "suspected_fraud", fraudFlag: true });
     expect(["retry_payment", "send_update_reminder", "escalate_operator", "stop"]).toContain(decision.action);
     expect(decision.action).not.toBe("retry_payment");
+  });
+});
+
+
+describe("RecoverIQ multi-step workflow", () => {
+  it("re-evaluates after a failed retry and recovers on a later bounded retry", () => {
+    const result = runRecoveryWorkflow({ ...baseCase, recoverability: 0.4, outcomeSeed: 0.55, retryCount: 0 });
+    expect(result.finalState).toBe("RECOVERED");
+    expect(result.recoveredAmount).toBe(baseCase.amount);
+    expect(result.attempts).toBeGreaterThanOrEqual(1);
+    expect(result.events.some((event) => event.kind === "re_evaluation")).toBe(true);
+    expect(result.events.some((event) => event.actionResult === "payment_recovered")).toBe(true);
+  });
+
+  it("models customer action before retrying an expired payment method", () => {
+    const result = runRecoveryWorkflow({ ...baseCase, failureReason: "expired_card", recoverability: 0.8, outcomeSeed: 0.2 });
+    expect(result.finalState).toBe("RECOVERED");
+    expect(result.events.some((event) => event.actionResult === "reminder_sent")).toBe(true);
+    expect(result.events.some((event) => event.actionResult === "payment_method_updated")).toBe(true);
+    expect(result.events.some((event) => event.actionResult === "payment_recovered")).toBe(true);
+  });
+
+  it("stops and escalates after the retry budget is exhausted", () => {
+    const result = runRecoveryWorkflow({ ...baseCase, retryCount: 3 });
+    expect(["ESCALATED", "HUMAN_REVIEW"]).toContain(result.finalState);
+    expect(result.events.some((event) => event.kind === "escalation")).toBe(true);
   });
 });

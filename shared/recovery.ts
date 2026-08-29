@@ -176,3 +176,115 @@ export function buildStakeholderCsv(outcomes: StakeholderOutcomeRow[], auditTrai
   const events = auditTrail.map((event) => ["audit_event", event.caseId, "", "", "", "", "", "", "", "", "", "", "", "", event.timestamp, event.kind, event.title, event.detail, event.status]);
   return [headers, ...rows, ...events].map((row) => row.map(escapeCsv).join(",")).join("\n") + "\n";
 }
+
+
+export type WorkflowState = "AUTOMATIC" | "WAITING" | "RECOVERED" | "STOPPED" | "ESCALATED" | "HUMAN_REVIEW";
+export type WorkflowEventKind = AuditEvent["kind"] | "re_evaluation" | "state_change";
+
+export type WorkflowEvent = AuditEvent & {
+  state: WorkflowState;
+  previousState?: WorkflowState;
+  nextAction?: RecoveryAction;
+  recoveredAmount?: number;
+  policyDecision?: "allowed" | "modified" | "blocked";
+  policyRule?: string;
+  actionResult?: string;
+};
+
+export type RecoveryWorkflow = {
+  finalState: WorkflowState;
+  outcome: SimulationOutcome;
+  recoveredAmount: number;
+  attempts: number;
+  decision: Decision;
+  events: WorkflowEvent[];
+};
+
+function workflowEvent(
+  payment: PaymentCase,
+  id: string,
+  timestamp: string,
+  kind: WorkflowEventKind,
+  title: string,
+  detail: string,
+  status: AuditEvent["status"],
+  state: WorkflowState,
+  extras: Partial<Omit<WorkflowEvent, "id" | "caseId" | "timestamp" | "kind" | "title" | "detail" | "status" | "state">> = {},
+): WorkflowEvent {
+  return { id, caseId: payment.id, timestamp, kind: kind as AuditEvent["kind"], title, detail, status, state, ...extras };
+}
+
+function simulateWorkflowRetry(payment: PaymentCase, retryNumber: number): SimulationOutcome {
+  const successThreshold = Math.min(0.98, payment.recoverability + Math.max(0, retryNumber - 1) * 0.22);
+  if (payment.outcomeSeed < successThreshold) return "success";
+  if (payment.outcomeSeed > 0.985) return "simulator_error";
+  return "temporary_failure";
+}
+
+/**
+ * Runs one payment through a bounded action/observation/re-evaluation loop.
+ * Existing classifyCase/simulateAction behavior remains available for callers
+ * that only need a single-step result.
+ */
+export function runRecoveryWorkflow(payment: PaymentCase, initialDecision = classifyCase(payment), maxSteps = 5): RecoveryWorkflow {
+  let currentPayment = { ...payment };
+  let decision = authorizeDecision(currentPayment, initialDecision);
+  let state: WorkflowState = decision.requiresApproval ? "HUMAN_REVIEW" : "AUTOMATIC";
+  let attempts = currentPayment.retryCount;
+  let recoveredAmount = 0;
+  let outcome: SimulationOutcome = "temporary_failure";
+  const events: WorkflowEvent[] = [];
+  const start = Date.UTC(2026, 0, 1) + Math.round(payment.outcomeSeed * 10_000_000);
+  const at = (offset: number) => new Date(start + offset * 1000).toISOString();
+
+  events.push(workflowEvent(currentPayment, `${payment.id}-diagnosis`, at(0), "diagnosis", "Failure diagnosed", `${decision.diagnosis} · ${Math.round(decision.confidence * 100)}% model/simulation confidence`, "info", state, { nextAction: decision.action, policyDecision: "allowed", policyRule: decision.policyRule }));
+
+  for (let step = 0; step < maxSteps; step += 1) {
+    decision = authorizeDecision(currentPayment, decision);
+    const policyChanged = decision.action !== initialDecision.action || decision.path !== initialDecision.path;
+    events.push(workflowEvent(currentPayment, `${payment.id}-policy-${step + 1}`, at(step * 3 + 1), "re_evaluation", "Policy re-evaluated", policyChanged ? `Recommendation modified by ${decision.policyRule}.` : `Guardrails satisfied · retry ${attempts}/3 · consent ${currentPayment.consent ? "yes" : "no"} · fraud ${currentPayment.fraudFlag ? "yes" : "no"}`, policyChanged ? "warning" : "success", state, { nextAction: decision.action, policyDecision: policyChanged ? "modified" : "allowed", policyRule: decision.policyRule }));
+
+    if (decision.requiresApproval || decision.action === "escalate_operator") {
+      const nextState: WorkflowState = decision.path === "restricted" ? "HUMAN_REVIEW" : "ESCALATED";
+      events.push(workflowEvent(currentPayment, `${payment.id}-escalate-${step + 1}`, at(step * 3 + 2), "escalation", "Human review required", decision.rationale, "blocked", nextState, { previousState: state, nextAction: "escalate_operator", policyDecision: "blocked", policyRule: decision.policyRule, actionResult: "No automated recovery action executed" }));
+      return { finalState: nextState, outcome: "permanent_failure", recoveredAmount: 0, attempts, decision, events };
+    }
+
+    if (decision.action === "stop") {
+      events.push(workflowEvent(currentPayment, `${payment.id}-stop-${step + 1}`, at(step * 3 + 2), "stop", "Workflow stopped safely", decision.stopReason || "Terminal policy condition", "warning", "STOPPED", { previousState: state, policyDecision: "blocked", policyRule: decision.policyRule, actionResult: "No further action executed" }));
+      return { finalState: "STOPPED", outcome: "permanent_failure", recoveredAmount: 0, attempts, decision, events };
+    }
+
+    if (decision.action === "send_update_reminder") {
+      state = "WAITING";
+      events.push(workflowEvent(currentPayment, `${payment.id}-reminder-${step + 1}`, at(step * 3 + 2), "action", "Payment-update reminder sent", "Customer contact consent verified; reminder simulated without contacting a real customer.", "success", state, { previousState: "AUTOMATIC", nextAction: "retry_payment", policyDecision: "allowed", policyRule: decision.policyRule, actionResult: "reminder_sent" }));
+      events.push(workflowEvent(currentPayment, `${payment.id}-method-update-${step + 1}`, at(step * 3 + 3), "verification", "Payment method updated", "Synthetic customer action completed in the simulator.", "success", "AUTOMATIC", { previousState: "WAITING", nextAction: "retry_payment", policyDecision: "allowed", policyRule: decision.policyRule, actionResult: "payment_method_updated" }));
+      currentPayment = { ...currentPayment, failureReason: "network_error", daysSinceFailure: MIN_COOLING_DAYS, retryCount: 0 };
+      decision = classifyCase(currentPayment);
+      initialDecision = decision;
+      continue;
+    }
+
+    attempts += 1;
+    outcome = simulateWorkflowRetry(currentPayment, attempts);
+    events.push(workflowEvent(currentPayment, `${payment.id}-retry-${attempts}`, at(step * 3 + 2), "action", `Retry #${attempts} executed`, decision.rationale, outcome === "success" ? "success" : "warning", "AUTOMATIC", { previousState: state, nextAction: outcome === "success" ? undefined : "retry_payment", policyDecision: "allowed", policyRule: decision.policyRule, actionResult: outcome === "success" ? "retry_executed_success" : "retry_executed_failure" }));
+
+    if (outcome === "success") {
+      recoveredAmount = currentPayment.amount;
+      events.push(workflowEvent(currentPayment, `${payment.id}-recovered`, at(step * 3 + 3), "verification", "Payment recovered", `${formatInr(recoveredAmount)} verified against synthetic ground truth.`, "success", "RECOVERED", { previousState: "AUTOMATIC", recoveredAmount, actionResult: "payment_recovered" }));
+      return { finalState: "RECOVERED", outcome, recoveredAmount, attempts, decision, events };
+    }
+    if (outcome === "simulator_error") {
+      events.push(workflowEvent(currentPayment, `${payment.id}-simulator-error`, at(step * 3 + 3), "stop", "Simulator error contained", "The simulator failed safely; no further automated action was attempted.", "warning", "STOPPED", { previousState: "AUTOMATIC", policyDecision: "blocked", actionResult: "simulator_error" }));
+      return { finalState: "STOPPED", outcome, recoveredAmount: 0, attempts, decision, events };
+    }
+
+    currentPayment = { ...currentPayment, retryCount: attempts };
+    state = attempts >= 3 ? "HUMAN_REVIEW" : "AUTOMATIC";
+    decision = classifyCase(currentPayment);
+    initialDecision = decision;
+  }
+
+  events.push(workflowEvent(currentPayment, `${payment.id}-max-steps`, at(maxSteps * 3 + 4), "stop", "Workflow step budget exhausted", "Maximum bounded workflow steps reached; no further automated action executed.", "warning", "STOPPED", { previousState: state, policyDecision: "blocked", actionResult: "max_steps_reached" }));
+  return { finalState: "STOPPED", outcome: "permanent_failure", recoveredAmount: 0, attempts, decision, events };
+}
