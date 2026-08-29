@@ -77,7 +77,7 @@ describe("RecoverIQ policy engine", () => {
 
   it("exports stakeholder outcomes and audit events as escaped CSV", () => {
     const event: AuditEvent = { id: "evt-1", caseId: "PAY-TEST", timestamp: "2026-08-27T10:00:00.000Z", kind: "diagnosis", title: "Failure, diagnosed", detail: "Customer said \"retry\"", status: "info" };
-    const csv = buildStakeholderCsv([{ caseId: "PAY-TEST", customer: "Test, Customer", amount: 2500, path: "recoverable", diagnosis: "Transient failure", action: "retry_payment", confidence: 0.87, policyRule: "R-02", approvalStatus: "not_required", outcome: "success", recovered: true, nextStep: "Verify payment", stopReason: "" }], [event]);
+    const csv = buildStakeholderCsv([{ caseId: "PAY-TEST", customer: "Test, Customer", amount: 2500, path: "recoverable", diagnosis: "Transient failure", action: "retry_payment", confidence: 0.87, policyRule: "R-02", approvalStatus: "not_required", outcome: "success", recovered: true, nextStep: "Verify payment", stopReason: "", finalState: "RECOVERED", attempts: 2, recoveredAmount: 2500 }], [event]);
     expect(csv).toContain("record_type,case_id,customer,amount_inr");
     expect(csv).toContain('"Test, Customer"');
     expect(csv).toContain('"Failure, diagnosed"');
@@ -98,9 +98,14 @@ describe("RecoverIQ multi-step workflow", () => {
     const result = runRecoveryWorkflow({ ...baseCase, recoverability: 0.4, outcomeSeed: 0.55, retryCount: 0 });
     expect(result.finalState).toBe("RECOVERED");
     expect(result.recoveredAmount).toBe(baseCase.amount);
-    expect(result.attempts).toBeGreaterThanOrEqual(1);
+    expect(result.attempts).toBe(2);
+    const firstRetryIndex = result.events.findIndex((event) => event.actionResult === "retry_executed_failure");
+    const secondRetryIndex = result.events.findIndex((event) => event.actionResult === "retry_executed_success");
+    const recoveryIndex = result.events.findIndex((event) => event.actionResult === "payment_recovered");
+    expect(firstRetryIndex).toBeGreaterThanOrEqual(0);
+    expect(secondRetryIndex).toBeGreaterThan(firstRetryIndex);
+    expect(recoveryIndex).toBeGreaterThan(secondRetryIndex);
     expect(result.events.some((event) => event.kind === "re_evaluation")).toBe(true);
-    expect(result.events.some((event) => event.actionResult === "payment_recovered")).toBe(true);
   });
 
   it("models customer action before retrying an expired payment method", () => {
