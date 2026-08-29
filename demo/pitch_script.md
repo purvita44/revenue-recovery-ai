@@ -36,3 +36,12 @@ Close with **Retry exhaustion** or **Fraud case**. Show that the policy engine b
 ## Updated closing statement
 
 > RecoverIQ is not a one-shot retry script. It is a bounded agent loop: AI diagnoses the case, policy authorizes the next step, the simulator executes and observes the result, the agent re-evaluates the case, and the workflow recovers, stops, or escalates with a complete audit trail.
+
+
+## Concrete evidence from the upgraded runner
+
+Use the reproducible seed `42` and the 48-case batch during the judging demo. The runner produces ₹131,352 in synthetic revenue at risk and ₹64,876 in simulated recovery value, a 49.39% recovery rate. The batch reaches `RECOVERED` in 24 cases, `HUMAN_REVIEW` in 6, `ESCALATED` in 17, and `STOPPED` in 1, while emitting 234 workflow events across 113 simulated retry attempts.
+
+When replaying the transient-failure fixture, point to the ordered evidence: `retry_executed_failure`, policy `re_evaluation`, `retry_executed_success`, and `payment_recovered`. This proves the system is not a one-shot recommendation screen; it observes the result and re-evaluates before taking the next bounded step.
+
+For the customer-action fixture, point to `reminder_sent`, `payment_method_updated`, and `retry_required` before the retry loop continues. For fraud, missing consent, or cooling-period cases, show that the policy produces a terminal stop or human-review route instead of claiming recovery.

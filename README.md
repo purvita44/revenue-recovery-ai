@@ -297,3 +297,26 @@ The dashboard includes replay controls for transient failures, expired cards, in
 ## Step-level auditability
 
 Every workflow step produces an audit event containing the case ID, timestamp, event type, state, previous state where applicable, next action, policy rule, policy decision, action result, and recovered amount where applicable. Server-side audit persistence remains the primary source for the displayed timeline, and the stakeholder CSV export includes the resulting workflow evidence.
+
+
+## Concrete multi-step evidence
+
+Using the reproducible seed `42` and the standard 48-case batch, the upgraded runner produced:
+
+| Result | Value |
+|---|---:|
+| Synthetic revenue at risk | ₹131,352 |
+| Simulated recovery value | ₹64,876 |
+| Recovery rate | 49.39% |
+| Cases reaching `RECOVERED` | 24 |
+| Cases reaching `HUMAN_REVIEW` | 6 |
+| Cases reaching `ESCALATED` | 17 |
+| Cases reaching `STOPPED` | 1 |
+| Workflow events emitted | 234 |
+| Total simulated retry attempts | 113 |
+
+These figures are reproducible outputs from the deterministic ground-truth simulator, not live merchant results.
+
+A deterministic transient-failure fixture with a 40% recoverability threshold and a 0.55 outcome seed demonstrates the multi-step loop: `retry_executed_failure → re_evaluation → retry_executed_success → payment_recovered`, with exactly two retry attempts. A protected or cooling-period case demonstrates the opposite outcome: policy stops the workflow before an unauthorized action is executed.
+
+A customer-action fixture follows the intended path through `reminder_sent → payment_method_updated → retry_required`, after which the same policy-controlled retry loop verifies whether payment recovery is possible. Each transition becomes a separate workflow event and contributes to the final case state.
